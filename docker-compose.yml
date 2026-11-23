@@ -1,0 +1,106 @@
+# TPRM-AI — local, privacy-first vendor risk assessment stack
+# Usage:  cp .env.example .env  &&  docker compose up -d --build
+# All secrets come from .env (never commit it).
+
+name: tprm-ai
+
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: tprm_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # schema is created on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: tprm_qdrant
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./qdrant:/qdrant/storage
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n
+    container_name: tprm_n8n
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - TZ=${TZ:-Europe/Madrid}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_FILESYSTEM_ALLOWLIST=/files
+      - N8N_ENABLE_FILE_WATCHER=true
+      - N8N_NODES_INCLUDE=n8n-nodes-base.executeCommand
+      # Available inside Code/HTTP nodes as $env.OPENROUTER_API_KEY / $env.OPENROUTER_MODEL
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+    volumes:
+      - ./n8n-data:/home/node/.n8n
+      - ./n8n-files:/home/node/.n8n-files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
+  presidio-anonymizer:
+    build:
+      context: ./services/presidio-es
+    container_name: presidio_anonymizer
+    ports:
+      - "127.0.0.1:5002:3000"
+    volumes:
+      # Live-edit the Spanish recognizers without rebuilding (docker compose restart presidio-anonymizer)
+      - ./services/presidio-es/presidio/presidio-analyzer:/app/presidio/presidio-analyzer
+      - ./services/presidio-es/presidio/presidio-anonymizer:/app/presidio/presidio-anonymizer
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  ocr-api:
+    build: ./services/ocr-api
+    container_name: ocr_api
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  # RAG layer (in progress): local multilingual embeddings for Qdrant
+  embedding-api:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.6
+    container_name: tprm_embedding
+    command: --model-id ${EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
+    environment:
+      - HF_ENDPOINT=https://huggingface.co
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./embedding-cache:/data
+    profiles: ["rag"]          # start with: docker compose --profile rag up -d
+    restart: unless-stopped
