@@ -1,0 +1,103 @@
+{
+  "vendor": {
+    "nombre": "CloudAtlas Digital S.L.",
+    "tipo_servicio": "Proveedor SaaS de automatización de procesos, almacenamiento documental y analítica operativa",
+    "tier": null,
+    "dpo_nombre": null,
+    "dpo_email": "tprm@cloudatlas-digital.example",
+    "dpo_tipo": null,
+    "pais_servicio": null,
+    "localizacion_datos": "West Europe y North Europe",
+    "subcontratistas": []
+  },
+  "certificaciones": {
+    "iso_27001_hasta": "31/03/2029",
+    "ens_hasta": null,
+    "soc2_hasta": null,
+    "otras": []
+  },
+  "scoring": {
+    "s1_dpo": null,
+    "s1_irp": null,
+    "s2_mfa": 5,
+    "s2_pam": null,
+    "s3_bcp": null,
+    "s4_dpa": null,
+    "s4_tia": null,
+    "s5_cspm": null,
+    "s6_cascada": null,
+    "s1_politica": 5,
+    "s1_auditoria": 5,
+    "s1_formacion": null,
+    "s1_normativa": 5,
+    "s3_rpo_horas": null,
+    "s3_rto_horas": null,
+    "s1_incidentes": null,
+    "s4_base_legal": null,
+    "s5_cloud_cert": 5,
+    "s6_subcontrata": null,
+    "s1_localizacion": 5,
+    "s2_baja_accesos": 5,
+    "s1_clasificacion": 5,
+    "s2_access_review": 5,
+    "s4_acceso_remoto": null,
+    "s1_analisis_riesgos": 5,
+    "s1_vulnerabilidades": 5,
+    "s4_medidas_tecnicas": 5,
+    "s2_minimo_privilegio": 5,
+    "s4_notificacion_brechas": null,
+    "s4_paises_transferencia": null,
+    "s6_controles_subcontratistas": null,
+    "s4_transferencias_internacionales": null,
+    "score_total": null,
+    "resultado": "Evaluación incompleta",
+    "score_llm": 83.5,
+    "secciones": {
+      "s1": {
+        "nombre": "Seguridad de la información",
+        "peso": 0.3,
+        "controles": 11,
+        "evaluados": 7,
+        "media": 5
+      },
+      "s2": {
+        "nombre": "Gestión de accesos e identidades (IAM)",
+        "peso": 0.25,
+        "controles": 5,
+        "evaluados": 4,
+        "media": 5
+      },
+      "s3": {
+        "nombre": "Continuidad de negocio",
+        "peso": 0.15,
+        "controles": 1,
+        "evaluados": 0,
+        "media": null
+      },
+      "s4": {
+        "nombre": "Protección de datos",
+        "peso": 0.2,
+        "controles": 7,
+        "evaluados": 1,
+        "media": null
+      },
+      "s5": {
+        "nombre": "Seguridad en la nube",
+        "peso": 0.05,
+        "controles": 2,
+        "evaluados": 1,
+        "media": 5
+      },
+      "s6": {
+        "nombre": "Subcontratistas",
+        "peso": 0.05,
+        "controles": 3,
+        "evaluados": 0,
+        "media": null
+      }
+    }
+  },
+  "gaps": [],
+  "campos_pendientes": [],
+  "resumen_ejecutivo": "Proveedor cumple con los requisitos de seguridad de la información, pero es necesario validar evidencias de auditoría completas."
+}
