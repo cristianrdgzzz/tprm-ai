@@ -1,0 +1,22 @@
+{
+  "_note": "Illustrative document. The mapping is the real output format of POST /anonymize (entity types renamed to TPRM aliases, counters per type). Note COMPANY_001 is the certifier, not the vendor: extract_vendor.js handles that.",
+  "input": {
+    "text": "Certificado ISO/IEC 27001:2022 emitido por SGS ICS Iberia a TechNova Solutions S.L. Fecha de emisión: 15/03/2024. Válido hasta: 14/03/2027.\nTechNova Solutions S.L presta servicios SaaS de gestión documental desde España y Alemania. Los datos se alojan principalmente en Irlanda. Existen transferencias internacionales a India y México. Contacto del DPO: dpo@technova-solutions.eu. TechNova Solutions S.L dispone de MFA en accesos críticos.",
+    "language": "es"
+  },
+  "output": {
+    "anonymized_text": "Certificado ISO/IEC 27001:2022 emitido por <COMPANY_001> a <COMPANY_002>. Fecha de emisión: <DATE_TIME_002>. Válido hasta: <DATE_TIME_001>.\n<COMPANY_002> presta servicios SaaS de gestión documental desde <LOCATION_003> y <LOCATION_004>. Los datos se alojan principalmente en <LOCATION_005>. Existen transferencias internacionales a <LOCATION_001> y <LOCATION_002>. Contacto del DPO: <EMAIL_001>. <COMPANY_002> dispone de MFA en accesos críticos.",
+    "mapping": {
+      "LOCATION_001": "India",
+      "EMAIL_001": "dpo@technova-solutions.eu",
+      "LOCATION_002": "México",
+      "LOCATION_003": "España",
+      "LOCATION_004": "Alemania",
+      "LOCATION_005": "Irlanda",
+      "DATE_TIME_001": "14/03/2027",
+      "DATE_TIME_002": "15/03/2024",
+      "COMPANY_001": "SGS ICS Iberia",
+      "COMPANY_002": "TechNova Solutions S.L"
+    }
+  }
+}
