@@ -1,0 +1,6 @@
+{
+  "files.eol": "\n",
+  "editor.formatOnSave": false,
+  "markdown.preview.breaks": false,
+  "files.exclude": { "**/__pycache__": true, "postgres": true, "qdrant": true, "n8n-data": true }
+}

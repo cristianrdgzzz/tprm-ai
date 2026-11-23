@@ -1,0 +1,38 @@
+# Secrets
+.env
+*.key
+
+# Runtime data / volumes
+postgres/
+qdrant/
+n8n-data/
+embedding-cache/
+
+# Vendor documents & outputs (real data never goes to git)
+n8n-files/input/*
+n8n-files/processed/*
+n8n-files/vendors/*
+n8n-files/maestro/inventario_vendors.csv
+!n8n-files/**/.gitkeep
+output_anon.txt
+output_mapping.json
+*.crdownload
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

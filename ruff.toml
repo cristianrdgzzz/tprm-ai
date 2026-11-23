@@ -1,0 +1,7 @@
+line-length = 110
+target-version = "py311"
+extend-exclude = ["services/presidio-es/presidio"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]   # FastAPI File(...) defaults are idiomatic
