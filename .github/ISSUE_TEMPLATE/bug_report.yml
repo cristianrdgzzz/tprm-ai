@@ -1,0 +1,23 @@
+name: Bug report
+description: Something in the pipeline does not work as expected
+labels: [bug]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [n8n workflow, presidio-es, ocr-api, database, RAG, docs]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what did you expect?
+      description: Never paste real vendor data or personal data. Use synthetic samples.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      render: shell

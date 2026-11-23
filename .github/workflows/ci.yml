@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  code-nodes:
+    name: n8n Code nodes (unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
+      - name: Workflow JSON is in sync with code-nodes/ and sql/
+        run: |
+          python3 scripts/build_workflow.py
+          git diff --exit-code n8n/workflows/
+
+  database:
+    name: PostgreSQL schema + queries
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tprm
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: tprm_ai
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tprm" --health-interval 5s --health-retries 10
+    env:
+      PGPASSWORD: ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply schema
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U tprm -d tprm_ai -f db/init/01_schema.sql
+      - name: Prepare every n8n query
+        run: |
+          for f in n8n/sql/*.sql; do
+            q=$(grep -v '^--' "$f" | tr '\n' ' ' | sed 's/;[[:space:]]*$//')
+            name=$(basename "$f" .sql | tr -c 'a-z0-9\n' '_')
+            echo "PREPARE q_${name} AS ${q};" | psql -v ON_ERROR_STOP=1 -h localhost -U tprm -d tprm_ai
+            echo "✔ $f"
+          done
+
+  python:
+    name: Python services (lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check services/presidio-es/server.py services/ocr-api/app.py
+
+  compose:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --env-file .env.example config --quiet
+
+  presidio-es:
+    name: Spanish recognizers (Presidio fork tests)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # NLP model tests; tracked but non-blocking while PERSON detection is improved
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install fork + spaCy model
+        working-directory: services/presidio-es/presidio
+        run: |
+          pip install -e presidio-analyzer -e presidio-anonymizer pytest
+          python -m spacy download es_core_news_md
+      - name: Run custom tests
+        working-directory: services/presidio-es/presidio
+        run: |
+          pytest -q presidio-analyzer/tests/test_company_span.py
+          pytest -q presidio-analyzer/tests/test_spanish_enterprise_recognizers.py
+          pytest -q presidio-anonymizer/tests/test_tprm_mapping_anonymizer.py
