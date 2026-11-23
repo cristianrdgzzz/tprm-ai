@@ -1,0 +1,774 @@
+{
+  "name": "TPRM - Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1 · Ingest\nPDFs from `n8n-files/input/`.\nScanned files (no text layer) go through **ocr-api** (Tesseract, spa+eng).",
+        "width": 900,
+        "height": 420,
+        "color": 7
+      },
+      "id": "f648b20d-81bd-5ca8-a782-02d3c1b746b8",
+      "name": "Note · Ingest",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2 · Anonymize locally\n**presidio-es** returns `anonymized_text` + reversible `mapping`.\nNothing has left the machine yet.",
+        "width": 260,
+        "height": 420,
+        "color": 4
+      },
+      "id": "13cadfca-663d-593c-a02e-a6679360fd3e",
+      "name": "Note · Anonymize",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3a · GDPR evidence\nMain vendor detection (ignores certifiers) → `vendors` → `anonymized_documents` (idempotent by content hash).",
+        "width": 760,
+        "height": 320,
+        "color": 5
+      },
+      "id": "a4cbc0e9-e0a3-50ff-8eab-1883857e2497",
+      "name": "Note · Evidence",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3b · LLM assessment\nOnly the **anonymized** text reaches OpenRouter. Placeholders are restored *after* the answer, in memory, and the score is computed in code.",
+        "width": 1980,
+        "height": 320,
+        "color": 6
+      },
+      "id": "f9e67181-90b5-51f0-92b5-a4d71ec97b0d",
+      "name": "Note · Assess",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1160,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d255d167-b2a4-59fe-bb6b-4bbe41825004",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "9662cafb-1aa9-5561-9a55-ec260be94715",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/home/node/.n8n-files/input/*.pdf",
+        "options": {}
+      },
+      "id": "6b128a2f-5c29-540e-95b9-4d51861475fc",
+      "name": "Read Files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "keepSource": "binary"
+        }
+      },
+      "id": "b74866ca-bd43-519a-8aa2-e1fa50735e4f",
+      "name": "Extract PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        420,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e9ac1499-004c-5fa8-bbcb-5f2510267130",
+              "leftValue": "={{ ($json.text || '').trim().length }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4986f4c0-1c28-509a-bb42-3ffbae09a78b",
+      "name": "Has text layer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ocr_api:8000/ocr",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "83cc5114-a774-5cee-8402-a42c3fcdb5ae",
+      "name": "OCR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6cf7bfaa-ed71-5fa5-afe8-1a15a959c7be",
+              "name": "text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "65189638-b757-5749-9ecc-8398290da84a",
+              "name": "file_name",
+              "value": "={{ $('Read Files').item.binary.data.fileName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d0a8c3a2-7a88-5ef0-b0e1-3645167e79a3",
+      "name": "PDF",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://presidio_anonymizer:3000/anonymize",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, language: 'es' }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "520e36ce-3369-57ad-9764-a297e1481864",
+      "name": "PRESIDIO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node: \"extract_vendor\"   (mode: Run Once for Each Item)\n// Input : output of the PRESIDIO HTTP node -> { anonymized_text, mapping }\n// Output: { company_name, company_placeholder, content_sha256 }\n//\n// Picks the *main* vendor among the COMPANY_* entities found by Presidio.\n// Heuristic (fixes the old \"COMPANY_001 is always the vendor\" bug):\n//   1. drop known certification bodies / auditors (SGS, AENOR, BSI, ...)\n//   2. prefer names with a legal suffix (S.L., S.A., S.L.U., GmbH, Ltd, Inc...)\n//   3. rank by number of mentions in the anonymized text, then by first position\n\nconst LEGAL_SUFFIX = /\\b(S\\.?\\s?L\\.?\\s?U?\\.?|S\\.?\\s?A\\.?\\s?U?\\.?|S\\.?\\s?C\\.?\\s?A\\.?|GmbH|Ltd\\.?|Limited|Inc\\.?|LLC|B\\.?V\\.?|SAS|SpA|AG)\\s*$/i;\n\nconst CERTIFIERS = [\n  'sgs', 'aenor', 'bureau veritas', 'bsi', 'tüv', 'tuv', 'dnv', 'lrqa', 'applus',\n  'intertek', 'eqa', 'lloyd', 'kpmg', 'deloitte', 'pwc', 'ernst & young', 'ey ',\n  'schellman', 'a-lign', 'coalfire', 'enac', 'ccn',\n];\n\nfunction isCertifier(name) {\n  const n = ` ${name.toLowerCase()} `;\n  return CERTIFIERS.some((c) => n.includes(` ${c.trim()}`));\n}\n\nfunction pickVendor(anonymizedText, mapping) {\n  const text = anonymizedText || '';\n  const candidates = Object.entries(mapping || {})\n    .filter(([key]) => key.startsWith('COMPANY_'))\n    .map(([key, value]) => {\n      const tag = `<${key}>`;\n      const mentions = text.split(tag).length - 1;\n      const firstPos = text.indexOf(tag);\n      return {\n        key,\n        value: String(value).trim(),\n        mentions,\n        firstPos: firstPos === -1 ? Number.MAX_SAFE_INTEGER : firstPos,\n        legal: LEGAL_SUFFIX.test(String(value).trim()),\n        certifier: isCertifier(String(value)),\n      };\n    })\n    .filter((c) => !c.certifier);\n\n  if (candidates.length === 0) return null;\n\n  candidates.sort(\n    (a, b) =>\n      Number(b.legal) - Number(a.legal) ||\n      b.mentions - a.mentions ||\n      a.firstPos - b.firstPos\n  );\n  return candidates[0];\n}\n\nfunction sha256(text) {\n  // NODE_FUNCTION_ALLOW_BUILTIN=crypto must be set for n8n (see docker-compose.yml)\n  return require('crypto').createHash('sha256').update(text || '', 'utf8').digest('hex');\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { pickVendor, isCertifier, sha256 };\n}\n\n// ---- n8n entry point -------------------------------------------------------\nif (typeof $input !== 'undefined') {\n  const { anonymized_text, mapping } = $input.item.json;\n  const vendor = pickVendor(anonymized_text, mapping);\n  return {\n    json: {\n      company_name: vendor ? vendor.value : 'PROVEEDOR_NO_IDENTIFICADO',\n      company_placeholder: vendor ? vendor.key : null,\n      content_sha256: sha256(anonymized_text),\n    },\n  };\n}\n"
+      },
+      "id": "2255986f-481e-5daa-bcf1-47397aabdc71",
+      "name": "extract_vendor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO vendors (company_name)\nVALUES ($1)\nON CONFLICT (company_name) DO UPDATE SET company_name = EXCLUDED.company_name\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [ $json.company_name ] }}"
+        }
+      },
+      "id": "c67b5197-f760-5bc3-bcf4-543daa2adfde",
+      "name": "upsert_vendor",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1440,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "tprm-postgres",
+          "name": "TPRM Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO anonymized_documents (vendor_id, file_name, content_sha256, anonymized_text, entity_mapping)\nVALUES ($1, $2, $3, $4, $5::jsonb)\nON CONFLICT (content_sha256) DO NOTHING\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [ String($json.id), $('PDF').item.json.file_name, $('extract_vendor').item.json.content_sha256, $('PRESIDIO').item.json.anonymized_text, JSON.stringify($('PRESIDIO').item.json.mapping) ] }}"
+        }
+      },
+      "id": "1ef605da-b70c-5eb5-b52f-5293376227ce",
+      "name": "save_anonymized",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1660,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "tprm-postgres",
+          "name": "TPRM Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/home/node/.n8n-files/maestro/prompt_tprm.txt",
+        "options": {}
+      },
+      "id": "3736a07e-5358-537e-9a2c-f96195bb9bf3",
+      "name": "Lee Prompt",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "id": "df42e124-c8c2-5fb3-b9c7-36cf99300428",
+      "name": "Prompt as text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1420,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node: \"build_prompt\"   (mode: Run Once for Each Item)\n// Previous node: \"Lee Prompt\" (Read/Write Files from Disk -> Extract from File as text)\n//   reading /home/node/.n8n-files/maestro/prompt_tprm.txt\n// Output: OpenRouter chat-completions body -> { model, temperature, messages }\n//\n// The master prompt contains the marker [EL DOCUMENTO SE AÑADIRÁ AQUÍ].\n// Everything except the document goes to the `system` role; the anonymized\n// document goes alone to the `user` role. Only anonymized text ever leaves n8n.\n\nconst MARKER = '[EL DOCUMENTO SE AÑADIRÁ AQUÍ]';\nconst DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';\n\nfunction buildMessages(promptTemplate, anonymizedText) {\n  if (!promptTemplate || !promptTemplate.includes(MARKER)) {\n    throw new Error(`Prompt template is missing the marker ${MARKER}`);\n  }\n  const [before, after] = promptTemplate.split(MARKER);\n  const system = `${before.replace(/DOCUMENTO A ANALIZAR:\\s*$/i, '').trim()}\\n\\n${after.trim()}`;\n  const user = `DOCUMENTO A ANALIZAR (anonimizado):\\n\\n${anonymizedText}`;\n  return [\n    { role: 'system', content: system },\n    { role: 'user', content: user },\n  ];\n}\n\nfunction buildBody(promptTemplate, anonymizedText, model) {\n  return {\n    model: model || DEFAULT_MODEL,\n    temperature: 0,\n    messages: buildMessages(promptTemplate, anonymizedText),\n  };\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { buildMessages, buildBody, MARKER };\n}\n\n// ---- n8n entry point -------------------------------------------------------\nif (typeof $input !== 'undefined') {\n  const prompt = $input.item.json.data;                       // text from \"Lee Prompt\"\n  const anonymized = $('PRESIDIO').item.json.anonymized_text;\n  const model = (typeof $env !== 'undefined' && $env.OPENROUTER_MODEL) || DEFAULT_MODEL;\n  return { json: buildBody(prompt, anonymized, model) };\n}\n"
+      },
+      "id": "dce53f83-e1d3-572a-8684-b14e3f97ca64",
+      "name": "build_prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENROUTER_API_KEY }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "TPRM-AI"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "6518b362-780c-50af-9251-bc25231980a5",
+      "name": "OpenRouter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        520
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node: \"clean_llm_json\"   (mode: Run Once for Each Item)\n// Input : OpenRouter response -> choices[0].message.content\n// Output: parsed TPRM assessment object\n//\n// LLMs often wrap JSON in ```json fences or add a sentence before/after.\n// This strips that noise and fails loudly (with a preview) if it is not JSON.\n\nfunction extractJson(raw) {\n  if (raw && typeof raw === 'object') return raw;\n  let text = String(raw || '').trim();\n  text = text.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\n  const start = text.indexOf('{');\n  const end = text.lastIndexOf('}');\n  if (start === -1 || end === -1 || end < start) {\n    throw new Error(`LLM response has no JSON object: ${text.slice(0, 200)}`);\n  }\n  const candidate = text.slice(start, end + 1);\n  try {\n    return JSON.parse(candidate);\n  } catch (err) {\n    throw new Error(`Invalid JSON from LLM (${err.message}): ${candidate.slice(0, 200)}`);\n  }\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { extractJson };\n}\n\n// ---- n8n entry point -------------------------------------------------------\nif (typeof $input !== 'undefined') {\n  const content = $input.item.json.choices?.[0]?.message?.content;\n  return { json: extractJson(content) };\n}\n"
+      },
+      "id": "686d8ec7-48b0-5119-ab82-a84841d81b83",
+      "name": "clean_llm_json",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node: \"deanonymize\"   (mode: Run Once for Each Item)\n// Input : assessment JSON with placeholders (<COMPANY_001>, <EMAIL_001>, ...)\n// Output: same JSON with the real values restored\n//\n// The mapping is taken from the PRESIDIO node of the *same execution*\n// (in memory). It is never sent to the LLM.\n\nconst PLACEHOLDER = /<([A-Z_]+_\\d{3})>/g;\n\nfunction restore(value, mapping) {\n  if (typeof value === 'string') {\n    return value.replace(PLACEHOLDER, (match, key) =>\n      Object.prototype.hasOwnProperty.call(mapping, key) ? mapping[key] : match\n    );\n  }\n  if (Array.isArray(value)) return value.map((v) => restore(v, mapping));\n  if (value && typeof value === 'object') {\n    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, restore(v, mapping)]));\n  }\n  return value;\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { restore };\n}\n\n// ---- n8n entry point -------------------------------------------------------\nif (typeof $input !== 'undefined') {\n  const mapping = $('PRESIDIO').item.json.mapping || {};\n  return { json: restore($input.item.json, mapping) };\n}\n"
+      },
+      "id": "7290a035-1703-530c-ba25-75181bb93e63",
+      "name": "deanonymize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node: \"compute_score\"   (mode: Run Once for Each Item)\n// Input : de-anonymized assessment JSON from the LLM\n// Output: { ...assessment, scoring: {..., score_total, resultado, secciones}, db: {...} }\n//\n// The LLM is asked for per-control scores (1-5). Its own score_total/resultado\n// were unreliable (often null or inconsistent), so the final score is computed\n// here, deterministically, following the rules of prompts/prompt_tprm.txt:\n//   - section score  = mean of non-null controls (null if >50% of controls are null)\n//   - total (0-100)  = sum(section_mean * weight) * 20\n//   - >=80 Aprobado | 60-79 Aprobado con condiciones | <60 Rechazado\n//   - any null section -> \"Evaluación incompleta\"\n//   - any gap with bloquea_aprobacion=true caps the result at \"Rechazado\"\n\nconst SECTIONS = {\n  s1: { name: 'Seguridad de la información', weight: 0.30 },\n  s2: { name: 'Gestión de accesos e identidades (IAM)', weight: 0.25 },\n  s3: { name: 'Continuidad de negocio', weight: 0.15 },\n  s4: { name: 'Protección de datos', weight: 0.20 },\n  s5: { name: 'Seguridad en la nube', weight: 0.05 },\n  s6: { name: 'Subcontratistas', weight: 0.05 },\n};\n\n// Fields inside `scoring` that are data, not 1-5 scores\nconst NON_SCORE_FIELDS = new Set([\n  's3_rto_horas', 's3_rpo_horas', 's4_paises_transferencia', 'score_total', 'resultado',\n]);\n\nfunction toScore(v) {\n  if (v === null || v === undefined || v === '') return null;\n  const n = Number(v);\n  return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null;\n}\n\nfunction computeScore(scoring = {}, gaps = []) {\n  const secciones = {};\n  let total = 0;\n  let incomplete = false;\n\n  for (const [prefix, meta] of Object.entries(SECTIONS)) {\n    const keys = Object.keys(scoring).filter(\n      (k) => k.startsWith(`${prefix}_`) && !NON_SCORE_FIELDS.has(k)\n    );\n    const values = keys.map((k) => toScore(scoring[k])).filter((v) => v !== null);\n    const nullRatio = keys.length ? 1 - values.length / keys.length : 1;\n    const mean = values.length && nullRatio <= 0.5\n      ? values.reduce((a, b) => a + b, 0) / values.length\n      : null;\n\n    secciones[prefix] = {\n      nombre: meta.name,\n      peso: meta.weight,\n      controles: keys.length,\n      evaluados: values.length,\n      media: mean === null ? null : Math.round(mean * 100) / 100,\n    };\n    if (mean === null) incomplete = true;\n    else total += mean * meta.weight;\n  }\n\n  const blocking = (Array.isArray(gaps) ? gaps : []).filter(\n    (g) => g && (g.bloquea_aprobacion === true || g.bloquea_aprobacion === 'true')\n  );\n\n  let score_total = incomplete ? null : Math.round(total * 20);\n  let resultado;\n  if (incomplete) resultado = 'Evaluación incompleta';\n  else if (score_total >= 80) resultado = 'Aprobado';\n  else if (score_total >= 60) resultado = 'Aprobado con condiciones';\n  else resultado = 'Rechazado';\n\n  if (blocking.length && resultado !== 'Evaluación incompleta') resultado = 'Rechazado';\n\n  return { score_total, resultado, secciones, gaps_bloqueantes: blocking.length };\n}\n\nfunction firstCertExpiry(cert = {}) {\n  return cert.iso_27001_hasta || cert.ens_hasta || cert.soc2_hasta || null;\n}\n\nfunction toDbParams(a) {\n  const v = a.vendor || {};\n  const s = a.scoring || {};\n  const json = (x) => (x === undefined || x === null ? null : JSON.stringify(x));\n  return {\n    company_name: v.nombre,\n    tipo_servicio: v.tipo_servicio ?? null,\n    tier: v.tier ?? null,\n    dpo_nombre: v.dpo_nombre ?? null,\n    dpo_email: v.dpo_email ?? null,\n    dpo_tipo: v.dpo_tipo ?? null,\n    country: v.pais_servicio ?? null,\n    localizacion_datos: v.localizacion_datos ?? null,\n    subcontratistas: json(v.subcontratistas),\n    certificaciones: json(a.certificaciones),\n    cert_expiry: firstCertExpiry(a.certificaciones),\n    scoring: json(s),\n    gaps: json(a.gaps),\n    campos_pendientes: json(a.campos_pendientes),\n    overall_score: s.score_total ?? null,\n    current_risk: s.resultado ?? null,\n    summary: a.resumen_ejecutivo ?? null,\n  };\n}\n\nfunction enrich(assessment, fallbackVendorName) {\n  const a = JSON.parse(JSON.stringify(assessment || {}));\n  a.vendor = a.vendor || {};\n  if (!a.vendor.nombre && fallbackVendorName) a.vendor.nombre = fallbackVendorName;\n  const result = computeScore(a.scoring || {}, a.gaps || []);\n  a.scoring = {\n    ...(a.scoring || {}),\n    score_llm: a.scoring?.score_total ?? null,   // keep what the LLM said, for audit\n    score_total: result.score_total,\n    resultado: result.resultado,\n    secciones: result.secciones,\n  };\n  a.db = toDbParams(a);\n  return a;\n}\n\nif (typeof module !== 'undefined' && module.exports) {\n  module.exports = { computeScore, enrich, toDbParams, SECTIONS };\n}\n\n// ---- n8n entry point -------------------------------------------------------\nif (typeof $input !== 'undefined') {\n  let fallback = null;\n  try { fallback = $('extract_vendor').item.json.company_name; } catch (e) { /* optional */ }\n  return { json: enrich($input.item.json, fallback) };\n}\n"
+      },
+      "id": "4d376b26-c89a-5e23-b4d6-ae0e04f469d8",
+      "name": "compute_score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO vendors (\n    company_name, tipo_servicio, tier, dpo_nombre, dpo_email, dpo_tipo, country,\n    localizacion_datos, subcontratistas, certificaciones, cert_expiry,\n    scoring, gaps, campos_pendientes, overall_score, current_risk, summary\n)\nVALUES (\n    $1, $2, NULLIF($3, '')::int, $4, $5, $6, $7,\n    $8, $9::jsonb, $10::jsonb, TO_DATE(NULLIF($11, ''), 'DD/MM/YYYY'),\n    $12::jsonb, $13::jsonb, $14::jsonb, NULLIF($15, '')::int, $16, $17\n)\nON CONFLICT (company_name) DO UPDATE SET\n    tipo_servicio      = COALESCE(EXCLUDED.tipo_servicio,      vendors.tipo_servicio),\n    tier               = COALESCE(EXCLUDED.tier,               vendors.tier),\n    dpo_nombre         = COALESCE(EXCLUDED.dpo_nombre,         vendors.dpo_nombre),\n    dpo_email          = COALESCE(EXCLUDED.dpo_email,          vendors.dpo_email),\n    dpo_tipo           = COALESCE(EXCLUDED.dpo_tipo,           vendors.dpo_tipo),\n    country            = COALESCE(EXCLUDED.country,            vendors.country),\n    localizacion_datos = COALESCE(EXCLUDED.localizacion_datos, vendors.localizacion_datos),\n    subcontratistas    = COALESCE(EXCLUDED.subcontratistas,    vendors.subcontratistas),\n    certificaciones    = COALESCE(EXCLUDED.certificaciones,    vendors.certificaciones),\n    cert_expiry        = COALESCE(EXCLUDED.cert_expiry,        vendors.cert_expiry),\n    scoring            = COALESCE(EXCLUDED.scoring,            vendors.scoring),\n    gaps               = COALESCE(EXCLUDED.gaps,               vendors.gaps),\n    campos_pendientes  = COALESCE(EXCLUDED.campos_pendientes,  vendors.campos_pendientes),\n    overall_score      = COALESCE(EXCLUDED.overall_score,      vendors.overall_score),\n    current_risk       = COALESCE(EXCLUDED.current_risk,       vendors.current_risk),\n    summary            = COALESCE(EXCLUDED.summary,            vendors.summary)\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ (() => { const d = $json.db; const s = v => v === null || v === undefined ? null : String(v); return [d.company_name, d.tipo_servicio, s(d.tier), d.dpo_nombre, d.dpo_email, d.dpo_tipo, d.country, d.localizacion_datos, d.subcontratistas, d.certificaciones, d.cert_expiry, d.scoring, d.gaps, d.campos_pendientes, s(d.overall_score), d.current_risk, d.summary]; })() }}"
+        }
+      },
+      "id": "6a077095-0e72-5498-88b3-73439f1aafa7",
+      "name": "upsert_assessment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2620,
+        520
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "tprm-postgres",
+          "name": "TPRM Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=mv \"/home/node/.n8n-files/input/{{ $('PDF').item.json.file_name }}\" \"/home/node/.n8n-files/processed/\""
+      },
+      "id": "c003c6dc-500c-55e1-b839-e9e59d0dcc6f",
+      "name": "Move to processed",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2820,
+        520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, company_name, tier, tipo_servicio, current_risk, overall_score,\n       to_char(cert_expiry, 'DD/MM/YYYY')        AS cert_expiry,\n       dpo_nombre, dpo_email, localizacion_datos,\n       to_char(updated_at, 'DD/MM/YYYY HH24:MI') AS updated_at\nFROM vendors\nORDER BY company_name;",
+        "options": {}
+      },
+      "id": "f5accd79-7996-5b38-88a8-43ffb742eded",
+      "name": "inventory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3020,
+        520
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "tprm-postgres",
+          "name": "TPRM Postgres"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {
+          "fileName": "inventario_vendors.csv"
+        }
+      },
+      "id": "5d0d1413-600b-5837-bc72-4373947cd21e",
+      "name": "CSV",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        3220,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/maestro/inventario_vendors.csv",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "55bb99e9-64cb-5bd0-b5ab-954159ffb45e",
+      "name": "Write inventory",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        3420,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "Read Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Files": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF": {
+      "main": [
+        [
+          {
+            "node": "Has text layer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has text layer?": {
+      "main": [
+        [
+          {
+            "node": "PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR": {
+      "main": [
+        [
+          {
+            "node": "PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF": {
+      "main": [
+        [
+          {
+            "node": "PRESIDIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PRESIDIO": {
+      "main": [
+        [
+          {
+            "node": "extract_vendor",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lee Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract_vendor": {
+      "main": [
+        [
+          {
+            "node": "upsert_vendor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "upsert_vendor": {
+      "main": [
+        [
+          {
+            "node": "save_anonymized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lee Prompt": {
+      "main": [
+        [
+          {
+            "node": "Prompt as text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt as text": {
+      "main": [
+        [
+          {
+            "node": "build_prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "build_prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter": {
+      "main": [
+        [
+          {
+            "node": "clean_llm_json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "clean_llm_json": {
+      "main": [
+        [
+          {
+            "node": "deanonymize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "deanonymize": {
+      "main": [
+        [
+          {
+            "node": "compute_score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compute_score": {
+      "main": [
+        [
+          {
+            "node": "upsert_assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "upsert_assessment": {
+      "main": [
+        [
+          {
+            "node": "Move to processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move to processed": {
+      "main": [
+        [
+          {
+            "node": "inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "inventory": {
+      "main": [
+        [
+          {
+            "node": "CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CSV": {
+      "main": [
+        [
+          {
+            "node": "Write inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Madrid"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "tprm"
+    },
+    {
+      "name": "gdpr"
+    }
+  ]
+}
